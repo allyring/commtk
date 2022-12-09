@@ -23,21 +23,50 @@ import (
 
 	// Bubbletea, stickers, and bubbles - for TUI rendering
 	"github.com/76creates/stickers"
+	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 )
 // ---------------------------------------------------------------------------------------------------------------------
-// Bubbletea model and model initialisation function
+// Lipgloss styling
+var (
+	defaultStyle = 	lipgloss.NewStyle().
+						Border(lipgloss.NormalBorder()).
+						BorderForeground(lipgloss.Color("e5e5e5"))
+)
+// ---------------------------------------------------------------------------------------------------------------------
+// Bubbletea model
+
 type model struct {
-	err		error				// Contains the most recent error encountered
-	flexBox	*stickers.FlexBox	// Pointer to a flexbox in memory
+	err			error				// Contains the most recent error encountered
+	flexBox		*stickers.FlexBox	// Pointer to a flexbox in memory
+}
+// ---------------------------------------------------------------------------------------------------------------------
+// Basic model renderer
+
+func (m *model) Init() tea.Cmd { return nil }
+
+func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	switch msg := msg.(type) {
+	case tea.WindowSizeMsg:
+		m.flexBox.SetWidth(msg.Width)
+		m.flexBox.SetHeight(msg.Height)
+
+		return m, nil
+
+	case tea.KeyMsg:
+		switch msg.String() {
+		case "ctrl+c", "q":
+			return m, tea.Quit
+		}
+
+	}
+	return m, nil
+}
+func (m *model) View() string {
+	return m.flexBox.Render()
 }
 
-//func ModelInit(config string) model {
-//	m := model{
-//		err: nil,
-//		flexBox: stickers.NewFlexBox(0,0),
-//	}
-//
-//}
+
 
 // ---------------------------------------------------------------------------------------------------------------------
 
@@ -49,7 +78,9 @@ func main() {
 		os.Exit(1)
 	}
 	if len(os.Args[1:]) == 1 {
-		configPath = os.Args[1]
+		if len(os.Args[1]) > 0 {
+			configPath = os.Args[1]
+		}
 	}
 
 
@@ -67,6 +98,38 @@ func main() {
 		panic(err)
 	}
 
-	fmt.Println(cfg.Config.Layout[2][0].Tool)
+	// The config is known to be valid, so now create a layout from it to pass into the initial model.
+	// Create a new variable to hold pointer to the flexbox we generate
+	generatedFlexBox := stickers.NewFlexBox(0,0)
+	var allRows []*stickers.FlexBoxRow
+
+
+	// Loop through the rows in the parsed config
+	for _, rowContents := range cfg.Config.Layout {
+		newRow := generatedFlexBox.NewRow()
+		var newRowCells []*stickers.FlexBoxCell
+
+		for _, cellData := range rowContents {
+			newCell := stickers.NewFlexBoxCell(cellData.RatioX,cellData.RatioY).SetStyle(defaultStyle)
+			newRowCells = append(newRowCells, newCell)
+		}
+		newRow.AddCells(newRowCells)
+		allRows = append(allRows, newRow)
+	}
+
+	generatedFlexBox.AddRows(allRows)
+
+
+
+	initialModel := model{
+		flexBox: generatedFlexBox,
+		err:     nil,
+	}
+
+	p := tea.NewProgram(&initialModel, tea.WithAltScreen())
+	if _, err := p.Run(); err != nil {
+		fmt.Printf("Error when starting commtk: %v", err)
+		os.Exit(1)
+	}
 
 }
