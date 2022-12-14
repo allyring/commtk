@@ -1,0 +1,33 @@
+{
+  "type": "node",
+  "ChildOrderedSizePercentages": [33,67],
+   "Children": [
+            {
+              "Leaf": true,
+              "ToolName": "T1"
+            },
+            {
+              "Leaf": false,
+              "VerticalStacked": true,
+               "Children": [
+                 {
+                        "Children": [
+                          {
+                            "leaf": true,
+                            "toolName": "T3"
+                          },
+                          {
+                            "leaf": true,
+                            "toolName": "T4"
+                          }
+                        ]
+                 },
+
+                 {
+                   "leaf": true,
+                    "toolName": "T2"
+                 }
+               ]
+            }
+     ]
+}

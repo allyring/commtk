@@ -3,9 +3,10 @@ module github.com/allyring/commtk
 go 1.19
 
 require (
-	github.com/76creates/stickers v0.0.0-20221107101131-5c02b38ad6c7
+	github.com/charmbracelet/bubbles v0.14.0
 	github.com/charmbracelet/bubbletea v0.23.1
 	github.com/charmbracelet/lipgloss v0.6.0
+	github.com/treilik/bubbleboxer v0.1.0
 	github.com/xeipuuv/gojsonschema v1.2.0
 )
 

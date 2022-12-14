@@ -16,120 +16,179 @@ package main
 
 import (
 	"fmt"
-	"os"
 
-	// Packages for the project
-	"github.com/allyring/commtk/cfg"
-
-	// Bubbletea, stickers, and bubbles - for TUI rendering
-	"github.com/76creates/stickers"
+	// Bubbletea for the TUI
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+
+	// Bubbletea bubbles
+	"github.com/charmbracelet/bubbles/spinner"
+	boxer "github.com/treilik/bubbleboxer"
 )
-// ---------------------------------------------------------------------------------------------------------------------
-// Lipgloss styling
-var (
-	defaultStyle = 	lipgloss.NewStyle().
-						Border(lipgloss.NormalBorder()).
-						BorderForeground(lipgloss.Color("e5e5e5"))
+
+const (
+	upperAddr  = "upper"
+	leftAddr   = "left"
+	middleAddr = "middle"
+	rightAddr  = "right"
+	lowerAddr  = "lower"
 )
-// ---------------------------------------------------------------------------------------------------------------------
-// Bubbletea model
+
+
+// SECTIONS:
+
+// (Tool bubbles get stored in separate modules that get imported.)
+
+// Model containers & relevant functions
+
+// Main model (bubbleboxer model)
+
+// Model container View, Update, and Init functions
+
+// bubbleboxer tree generator from config parsing
+
+// Model edit function
+//
+
+// Main function
+
+
+
+func main() {
+	// leaf content creation (models)
+	upper := spinnerHolder{spinner.New()}
+	left := stringer(leftAddr)
+	middle := stringer(middleAddr)
+	right := stringer(rightAddr)
+
+	lower := stringer(fmt.Sprintf("%s: use ctrl+c to quit", lowerAddr))
+
+	// layout-tree defintion
+	m := model{tui: boxer.Boxer{}}
+	m.tui.LayoutTree = boxer.Node{
+		// orientation
+		VerticalStacked: true,
+		// spacing
+		SizeFunc: func(_ boxer.Node, widthOrHeight int) []int {
+			return []int{
+				// since this node is vertical stacked return the height partioning since the width stays for all children fixed
+				widthOrHeight - 2,
+				1,
+				// make also sure that the amount of the returned ints match the amount of children:
+				// in this case two, but in more complex cases read the amount of the chilren from the len(boxer.Node.Children)
+			}
+		},
+		Children: []boxer.Node{
+			{
+				SizeFunc: func(_ boxer.Node, widthOrHeight int) []int {
+					return []int{
+						widthOrHeight/3,
+						(widthOrHeight/3)*2,
+
+					}
+				},
+				Children: []boxer.Node{
+					m.tui.CreateLeaf(upperAddr, upper),
+					{
+						VerticalStacked: true,
+						Children: []boxer.Node{
+							{
+								Children: []boxer.Node{
+									m.tui.CreateLeaf(leftAddr, left),
+									m.tui.CreateLeaf(rightAddr, right),
+								},
+							},
+							// make sure to encapsulate the models into a leaf with CreateLeaf:
+							m.tui.CreateLeaf(middleAddr, middle),
+						},
+					},
+				},
+			},
+			m.tui.CreateLeaf(lowerAddr, lower),
+
+		},
+	}
+	p := tea.NewProgram(m,tea.WithAltScreen())
+	if _, err := p.Run(); err != nil {
+		fmt.Println(err)
+	}
+}
 
 type model struct {
-	err			error				// Contains the most recent error encountered
-	flexBox		*stickers.FlexBox	// Pointer to a flexbox in memory
+	tui boxer.Boxer
 }
-// ---------------------------------------------------------------------------------------------------------------------
-// Basic model renderer
 
-func (m *model) Init() tea.Cmd { return nil }
-
-func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (m model) Init() tea.Cmd {
+	return spinner.Tick
+}
+func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
-	case tea.WindowSizeMsg:
-		m.flexBox.SetWidth(msg.Width)
-		m.flexBox.SetHeight(msg.Height)
-
-		return m, nil
-
 	case tea.KeyMsg:
 		switch msg.String() {
-		case "ctrl+c", "q":
+		case "q", "ctrl+c":
 			return m, tea.Quit
 		}
-
+	case tea.WindowSizeMsg:
+		err := m.tui.UpdateSize(msg)
+		if err != nil {
+			return nil, nil
+		}
+	case spinner.TickMsg:
+		var cmd tea.Cmd
+		err := m.editModel(upperAddr, func(v tea.Model) (tea.Model, error) {
+			v, cmd = v.Update(msg)
+			return v, nil
+		})
+		if err != nil {
+			return nil, nil
+		}
+		return m, cmd
 	}
 	return m, nil
 }
-func (m *model) View() string {
-	return m.flexBox.Render()
+func (m model) View() string {
+	return m.tui.View()
 }
 
-
-
-// ---------------------------------------------------------------------------------------------------------------------
-
-func main() {
-	// The args are a path to a custom config. If the args exist, pass them into the config layout generator.
-	configPath := ""
-	if len(os.Args[1:]) > 1 {
-		fmt.Println("Cannot accept several configs.")
-		os.Exit(1)
+func (m *model) editModel(addr string, edit func(tea.Model) (tea.Model, error)) error {
+	if edit == nil {
+		return fmt.Errorf("no edit function provided")
 	}
-	if len(os.Args[1:]) == 1 {
-		if len(os.Args[1]) > 0 {
-			configPath = os.Args[1]
-		}
+	v, ok := m.tui.ModelMap[addr]
+	if !ok {
+		fmt.Errorf("no model with address '%s' found", addr)
 	}
-
-
-	// Create the layout config from the given file / the default config.
-	err, schemaErr := cfg.LoadLayoutFile(configPath)
+	v, err := edit(v)
 	if err != nil {
-		panic(err)
+		return err
 	}
+	m.tui.ModelMap[addr] = v
+	return nil
+}
 
-	if schemaErr != nil {
-		fmt.Println("JSON errors")
-		for _, schemaErrItem := range schemaErr {
-			fmt.Println("- " + schemaErrItem.Description())
-		}
-		panic(err)
-	}
+type stringer string
 
-	// The config is known to be valid, so now create a layout from it to pass into the initial model.
-	// Create a new variable to hold pointer to the flexbox we generate
-	generatedFlexBox := stickers.NewFlexBox(0,0)
-	var allRows []*stickers.FlexBoxRow
+func (s stringer) String() string {
+	return string(s)
+}
 
+// satisfy the tea.Model interface
+func (s stringer) Init() tea.Cmd                           { return nil }
+func (s stringer) Update(msg tea.Msg) (tea.Model, tea.Cmd) { return s, nil }
+func (s stringer) View() string                            { return s.String() }
 
-	// Loop through the rows in the parsed config
-	for _, rowContents := range cfg.Config.Layout {
-		newRow := generatedFlexBox.NewRow()
-		var newRowCells []*stickers.FlexBoxCell
+type spinnerHolder struct {
+	m spinner.Model
+}
 
-		for _, cellData := range rowContents {
-			newCell := stickers.NewFlexBoxCell(cellData.RatioX,cellData.RatioY).SetStyle(defaultStyle)
-			newRowCells = append(newRowCells, newCell)
-		}
-		newRow.AddCells(newRowCells)
-		allRows = append(allRows, newRow)
-	}
+func (s spinnerHolder) Init() tea.Cmd {
+	return s.m.Tick
+}
 
-	generatedFlexBox.AddRows(allRows)
-
-
-
-	initialModel := model{
-		flexBox: generatedFlexBox,
-		err:     nil,
-	}
-
-	p := tea.NewProgram(&initialModel, tea.WithAltScreen())
-	if _, err := p.Run(); err != nil {
-		fmt.Printf("Error when starting commtk: %v", err)
-		os.Exit(1)
-	}
-
+func (s spinnerHolder) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	m, cmd := s.m.Update(msg)
+	s.m = m
+	return s, cmd
+}
+func (s spinnerHolder) View() string {
+	return s.m.View()
 }
