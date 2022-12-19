@@ -1,0 +1,46 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "properties": {
+    "ChildOrderedSizePercentages": {
+      "type": "array",
+      "items": {
+        "type": "integer"
+      }
+    },
+    "Children": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "Leaf": {
+            "type": "boolean"
+          },
+          "ToolName": {
+            "type": "string"
+          },
+          "VerticalStacked": {
+            "type": "boolean"
+          },
+          "Children": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "leaf": {
+                  "type": "boolean"
+                },
+                "toolName": {
+                  "type": "string"
+                },
+                "Children": {
+                  "$ref": "#/properties/Children/items/properties/Children"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
